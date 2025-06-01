@@ -229,3 +229,60 @@ class PPO(OnPolicyMixin, NormalizeObservationsMixin, NormalizeRewardsMixin, Algo
         ts = self.update_actor(ts, batch)
         ts = self.update_critic(ts, batch)
         return ts
+
+if __name__ == "__main__":
+    import wandb
+
+    #jax.config.update("jax_enable_x64", True)
+
+    config = {
+        "env": "MountainCarContinuous-v0",
+        "normalize_observations": True,
+        "total_timesteps": 1_000_000,
+        "eval_freq": 8192,
+        "num_envs": 32,
+        "num_steps": 128,
+        "num_epochs": 4,
+        "num_minibatches": 32,
+        "learning_rate": 0.0003,
+        "max_grad_norm": 0.5,
+        "gamma": 0.99,
+        "gae_lambda": 0.95,
+        "clip_eps": 0.2,
+        "vf_coef": 0.5,
+        "ent_coef": 0.0,
+    }
+
+    wandb.init(project="my-awesome-project", config=config)
+
+    ppo = PPO.create(**config)
+
+    eval_callback = ppo.eval_callback
+
+
+    def log(step, data):
+        step = step.item()
+        wandb.log(data, step=step)
+
+    def wandb_callback(ppo, train_state, rng):
+        lengths, returns = eval_callback(ppo, train_state, rng)
+
+        jax.experimental.io_callback(
+            log,
+            (),  # result_shape_dtypes (wandb.log returns None)
+            train_state.global_step,
+            {"episode_length": lengths.mean(), "return": returns.mean()},
+        )
+
+        # Since we log to wandb, we don't want to return anything that is collected
+        # throughout training
+        return ()
+
+
+    ppo = ppo.replace(eval_callback=wandb_callback)
+
+    rng = jax.random.PRNGKey(0)
+    print("Compiling...")
+    compiled_train = jax.jit(ppo.train).lower(rng).compile()
+    print("Training...")
+    compiled_train(rng)

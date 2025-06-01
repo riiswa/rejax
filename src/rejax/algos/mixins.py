@@ -273,12 +273,15 @@ class NormalizeRewardsMixin(struct.PyTreeNode):
     def normalize_rew(self, rms_state, r):
         return r / jnp.sqrt(rms_state.var + 1e-8)
 
-    def update_rew_rms(self, rms_state, rewards, dones, batched=True):
+    def update_rew_rms(self, rms_state, rewards, dones, batched=True, update_return=True):
         discount = self.reward_normalization_discount
-        returns = rewards + (1 - dones) * discount * rms_state.returns
-        rms_state = rms_state.replace(returns=returns)
-        return update_rms(rms_state, returns, batched=batched)
+        if update_return:
+            returns = rewards + (1 - dones) * discount * rms_state.returns
+            rms_state = rms_state.replace(returns=returns)
+            return update_rms(rms_state, returns, batched=batched)
+        else:
+            return update_rms(rms_state, rewards, batched=batched)
 
-    def update_and_normalize_rew(self, rms_state, r, done, batched=True):
-        rms_state = self.update_rew_rms(rms_state, r, done, batched=batched)
+    def update_and_normalize_rew(self, rms_state, r, done, batched=True, update_return=True):
+        rms_state = self.update_rew_rms(rms_state, r, done, batched=batched, update_return=update_return)
         return rms_state, self.normalize_rew(rms_state, r)

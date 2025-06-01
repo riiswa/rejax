@@ -8,9 +8,15 @@ from gymnax.environments import spaces
 from gymnax.environments.environment import Environment as GymnaxEnv
 from jax import numpy as jnp
 
+from rejax.compat.wrappers import MilestoneRewardWrapper
+
 
 def create_brax(env_name, **kwargs):
+    if env_name.startswith('sparse-'):
+        is_sparse = True
+        env_name = env_name.replace('sparse-', '')
     env = create(env_name, **kwargs)
+    env = MilestoneRewardWrapper(env)
     env = Brax2GymnaxEnv(env)
     return env, env.default_params
 

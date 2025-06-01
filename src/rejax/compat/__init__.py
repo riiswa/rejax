@@ -2,6 +2,8 @@ import importlib
 
 from gymnax import make
 
+from rejax.envs.mountain_car import ContinuousMountainCar
+
 _create_fns = {
     "brax": ("rejax.compat.brax2gymnax", "create_brax"),
     "navix": ("rejax.compat.navix2gymnax", "create_navix"),
