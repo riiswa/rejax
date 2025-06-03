@@ -41,9 +41,11 @@ def main(cfg: DictConfig) -> None:
     def log(step, data, seed):
         step = step.item()
         seed = seed.item() - cfg.experiment.seed
-
         for k, v in data.items():
-            run.track(v, name=k, step=step, context={"seed": seed})
+            try:
+                run.track(v.item(), name=k, step=step, context={"seed": seed})
+            except ValueError:
+                print(f"Error: {(k, v)}")
 
     def logging_callback(ppo, train_state, rng):
         lengths, returns = eval_callback(ppo, train_state, rng)

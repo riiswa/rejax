@@ -25,8 +25,8 @@ class RNKParams(ExplorationBonusParams):
     n_features: int = 1000
     length_scale: float = None
     reg: float = 1e-3
-    n_iterations: int = struct.field(pytree_node=False, default=0)
-    n_samples: int = struct.field(pytree_node=False, default=None)
+    n_iterations: int = struct.field(pytree_node=False, default=20)
+    n_samples: int = struct.field(pytree_node=False, default=128)
 
 # -----------------------------------------------------------------------------
 # RNK State
@@ -198,14 +198,16 @@ def _update_precision_matrix(
 
     precision = jax.lax.cond(
         residual_norm >= 1.0,
-        lambda: jnp.eye(regularized_cov.shape[0]) * (1.0 / jnp.linalg.norm(regularized_cov, ord=2)),
+        lambda: jnp.eye(regularized_cov.shape[0]) * (1.0 / jnp.linalg.norm(regularized_cov)),
         lambda: current_precision,
     )
 
     # Iterative refinement using Neumann series
     for _ in range(n_iterations):
-        precision = precision @ (2 * jnp.eye(regularized_cov.shape[0]) -
-                               regularized_cov @ precision)
+        # precision = precision @ (2 * jnp.eye(regularized_cov.shape[0]) -
+        #                        regularized_cov @ precision)
+        precision = precision @ (3 * jnp.eye(regularized_cov.shape[0]) - regularized_cov @ precision @ (
+                    3 * jnp.eye(regularized_cov.shape[0]) - regularized_cov @ precision))
         # Ensure symmetry
         precision = (precision + precision.T) / 2
 
@@ -264,13 +266,13 @@ def update_rnk(
     )
 
     # Compute diagnostics
-    condition_number = jnp.linalg.cond(regularized_cov)
+    #condition_number = jnp.linalg.cond(regularized_cov)
     inversion_error = jnp.linalg.norm(
         jnp.eye(regularized_cov.shape[0]) - regularized_cov @ new_precision_matrix
     )
 
     diagnostics = {
-        "bonus/cond": condition_number,
+        #"bonus/cond": condition_number,
         "bonus/error": inversion_error,
     }
 
