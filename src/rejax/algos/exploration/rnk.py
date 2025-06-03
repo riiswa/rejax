@@ -25,7 +25,7 @@ class RNKParams(ExplorationBonusParams):
     n_features: int = 1000
     length_scale: float = None
     reg: float = 1e-3
-    n_iterations: int = struct.field(pytree_node=False, default=20)
+    n_iterations: int = struct.field(pytree_node=False, default=0)
     n_samples: int = struct.field(pytree_node=False, default=128)
 
 # -----------------------------------------------------------------------------
@@ -68,7 +68,6 @@ def _create_random_fourier_features(
     key: jnp.ndarray,
     input_dim: int,
     n_features: int,
-    length_scale: float
 ) -> Callable[[jnp.ndarray, jnp.ndarray], jnp.ndarray]:
     """Create random Fourier feature transformation function.
 
@@ -122,14 +121,14 @@ def init_rnk(key: jnp.ndarray, obs_size: int, params: RNKParams) -> RNKBonus:
         Initialized RNK bonus object
     """
     feature_fn = _create_random_fourier_features(
-        key, obs_size, params.n_features, params.length_scale
+        key, obs_size, params.n_features
     )
 
     # Initialize covariance as identity matrix
-    cov_matrix = jnp.eye(params.n_features)
+    cov_matrix = jnp.eye(params.n_features) * params.n_features
 
     # Initialize precision matrix as regularized inverse
-    precision_matrix = jnp.zeros((params.n_features, params.n_features)) / params.reg
+    precision_matrix = jnp.zeros((params.n_features, params.n_features))
 
     state = RNKState(
         cov_matrix=cov_matrix,
@@ -140,11 +139,6 @@ def init_rnk(key: jnp.ndarray, obs_size: int, params: RNKParams) -> RNKBonus:
     )
 
     return RNKBonus(state=state, params=params)
-
-
-@jax.jit
-def quad(x, A):
-    return x.T @ A @ x
 
 
 @jax.jit
@@ -168,7 +162,7 @@ def compute_rnk_bonus(bonus: RNKBonus, observations: jnp.ndarray, actions: jnp.n
                                bonus.state.precision_matrix,
                                features)
 
-    return 0.5 * jnp.log(1.0 + quadratic_form)
+    return 0.5 * jnp.log1p(quadratic_form)
 
 
 @partial(jax.jit, static_argnums=(2,))
@@ -202,14 +196,24 @@ def _update_precision_matrix(
         lambda: current_precision,
     )
 
-    # Iterative refinement using Neumann series
-    for _ in range(n_iterations):
-        # precision = precision @ (2 * jnp.eye(regularized_cov.shape[0]) -
-        #                        regularized_cov @ precision)
-        precision = precision @ (3 * jnp.eye(regularized_cov.shape[0]) - regularized_cov @ precision @ (
-                    3 * jnp.eye(regularized_cov.shape[0]) - regularized_cov @ precision))
+    # Define the iteration step function
+    def newton_step(precision, _):
+        """Single iteration of Neumann series refinement."""
+        precision = precision @ (2 * jnp.eye(regularized_cov.shape[0]) - regularized_cov @ precision)
         # Ensure symmetry
         precision = (precision + precision.T) / 2
+        return precision, None
+
+    precision, _ = jax.lax.scan(newton_step,precision,None,  length=n_iterations)
+
+    # # Iterative refinement using Neumann series
+    # for _ in range(n_iterations):
+    #     precision = precision @ (2 * jnp.eye(regularized_cov.shape[0]) -
+    #                            regularized_cov @ precision)
+    #     # precision = precision @ (3 * jnp.eye(regularized_cov.shape[0]) - regularized_cov @ precision @ (
+    #     #             3 * jnp.eye(regularized_cov.shape[0]) - regularized_cov @ precision))
+    #     # Ensure symmetry
+    #     precision = (precision + precision.T) / 2
 
     return precision
 

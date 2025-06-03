@@ -211,7 +211,21 @@ class PPO(OnPolicyMixin, NormalizeObservationsMixin, NormalizeRewardsMixin, Algo
         batch_size = getattr(self, "num_envs", ())
         return {"intrinsic_rew_rms_state": RewardRMSState.create(batch_size)}
 
+    def print_progress(self, timesteps):
+        if timesteps % (10 * self.num_envs * self.num_steps) == 0:
+            progress = (timesteps / self.total_timesteps) * 100
+
+            # Create progress bar
+            bar_length = 30
+            filled_length = int(bar_length * progress / 100)
+            bar = '█' * filled_length + '░' * (bar_length - filled_length)
+
+            # Print with carriage return to stay on same line, add padding to clear previous text
+            print(f"\r🚀 [{bar}] {progress:5.1f}% | {timesteps:,}/{self.total_timesteps:,} timesteps    ", end='', flush=True)
+
     def train_iteration(self, ts):
+        jax.experimental.io_callback(self.print_progress, (), ts.global_step)
+
         ts, trajectories = self.collect_trajectories(ts)
 
         # Get the last values from both critics

@@ -1,5 +1,5 @@
 import os
-
+import time  # Add this import
 import jax
 import jax.numpy as jnp
 import hydra
@@ -7,7 +7,6 @@ from omegaconf import DictConfig
 from aim import Run
 import pandas as pd
 import numpy as np
-
 from rejax.algos.ppo_with_bonus import PPO
 
 
@@ -31,11 +30,11 @@ def main(cfg: DictConfig) -> None:
     print(f"🔍 Exploration: {cfg.training.bonus_type}")
     print(f"🌱 Seeds: {cfg.experiment.n_seeds} (starting from {cfg.experiment.seed})")
 
-    run = Run(experiment=experiment_name)
-    run["hparams"] = config
+    if cfg.experiment.logging:
+        run = Run(experiment=experiment_name)
+        run["hparams"] = config
 
     ppo = PPO.create(**config)
-
     eval_callback = ppo.eval_callback
 
     def log(step, data, seed):
@@ -58,14 +57,21 @@ def main(cfg: DictConfig) -> None:
         )
         return lengths, returns
 
-    ppo = ppo.replace(eval_callback=logging_callback, logging_callback=log)
+    if cfg.experiment.logging:
+        ppo = ppo.replace(eval_callback=logging_callback, logging_callback=log)
 
     train_fn = jax.jit(ppo.train_with_seed)
     vmapped_train_fn = jax.vmap(train_fn)
 
     n_seeds = cfg.experiment.n_seeds
 
+    # Time the training execution
+    start_time = time.time()
     train_state, (episode_lengths, returns) = vmapped_train_fn(jnp.arange(n_seeds) + cfg.experiment.seed)
+    end_time = time.time()
+
+    execution_time = end_time - start_time
+    print(f"⏱️  Training completed in {execution_time:.2f} seconds ({execution_time / 60:.2f} minutes)")
 
     print(f"✅ Experiment '{experiment_name}' completed!")
 

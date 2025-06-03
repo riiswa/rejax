@@ -2,15 +2,16 @@ experiment:
   name: null  # If null/empty, auto-generates: {env}_{exploration}_seed{seed}
   seed: 0
   n_seeds: 32
+  logging: false
 
 training:
-  env: "custom/pointmaze-large-v0"
+  env: "MountainCar-v0"
   bonus_type: "rnk"
   normalize_observations: true
   normalize_intrinsic_rewards: true
   total_timesteps: 1_000_000
   anneal_lr: true
-  eval_freq: 8192
+  eval_freq: 24576
   num_envs: 32
   num_steps: 128
   num_epochs: 4
