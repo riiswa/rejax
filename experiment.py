@@ -3,7 +3,7 @@ import time  # Add this import
 import jax
 import jax.numpy as jnp
 import hydra
-from omegaconf import DictConfig
+from omegaconf import DictConfig, OmegaConf
 from aim import Run
 import pandas as pd
 import numpy as np
@@ -13,7 +13,7 @@ from rejax.algos.ppo_with_bonus import PPO
 @hydra.main(version_base=None, config_path=".", config_name="config")
 def main(cfg: DictConfig) -> None:
     # Convert Hydra config to dict for PPO.create
-    config = dict(cfg.training)
+    config = OmegaConf.to_container(cfg.training)
 
     # Create experiment name only if not provided in config
     if hasattr(cfg.experiment, 'name') and cfg.experiment.name:

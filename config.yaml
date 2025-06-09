@@ -6,7 +6,9 @@ experiment:
 
 training:
   env: "MountainCar-v0"
-  bonus_type: "rnk"
+  agent_kwargs:
+    activation: tanh
+  bonus_type: "rnd"
   normalize_observations: true
   normalize_intrinsic_rewards: true
   total_timesteps: 1_000_000

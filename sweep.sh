@@ -50,6 +50,7 @@ ENVS=(
   "brax/sparse-halfcheetah"
   "brax/sparse-walker2d"
   "brax/sparse-hopper"
+  "brax/sparse-swimmer"
   "custom/pointmaze-umaze-v0"
   "custom/pointmaze-medium-v0"
   "custom/pointmaze-large-v0"

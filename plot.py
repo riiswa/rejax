@@ -263,7 +263,7 @@ def create_all_plots(results_dir: str, output_dir: str = None):
 
         # Clean filename
         clean_name = env_name.replace('-v0', '').replace('-v1', '')
-        filename = f"{clean_name}_results.png"
+        filename = f"{clean_name}_results.pdf"
         save_path = os.path.join(output_dir, filename)
 
         fig = create_environment_plot(env_name, env_data, save_path)
