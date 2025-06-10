@@ -22,15 +22,35 @@ class RNKParams(ExplorationBonusParams):
         reg: Regularization parameter for covariance matrix
         n_iterations: Number of iterations for iterative matrix inversion
     """
-    n_features: int = 1000
+    n_features: int = 1024
     length_scale: float = None
-    reg: float = 1e-3
+    reg: float = 1.
     n_iterations: int = struct.field(pytree_node=False, default=0)
-    n_samples: int = struct.field(pytree_node=False, default=128)
+    n_samples: int = struct.field(pytree_node=False, default=None)
+    use_effective_dim: bool = struct.field(pytree_node=False, default=True)
 
 # -----------------------------------------------------------------------------
 # RNK State
 # -----------------------------------------------------------------------------
+
+def compute_effective_dimension(X, gamma):
+    T = X.shape[0]
+    X = X.reshape(T, -1)
+    # Covariance matrix C = X^T X + gamma * I
+    C = X.T @ X + gamma * jnp.eye(X.shape[1])
+
+    # Eigenvalues in decreasing order
+    eigenvals = jnp.sort(jnp.linalg.eigvals(C))[::-1]
+
+    # Lambda_{T,j} = sum of eigenvals[j:] for j=1,2,...,d
+    cumsum_reverse = jnp.cumsum(eigenvals[::-1])[::-1]
+    Lambda_T = jnp.concatenate([cumsum_reverse[1:], jnp.array([0.0])])
+
+    # Find min j: j*gamma*ln(T) >= Lambda_{T,j}
+    j_vals = jnp.arange(1, len(eigenvals) + 1)
+    condition = j_vals * gamma * jnp.log(T) >= Lambda_T
+
+    return jnp.argmax(condition) + 1
 
 @struct.dataclass
 class RNKState:

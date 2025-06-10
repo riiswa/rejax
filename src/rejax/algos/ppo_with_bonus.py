@@ -15,7 +15,7 @@ from typing import NamedTuple, Any, Optional, Callable
 from rejax.algos.algorithm import Algorithm, register_init, INIT_REGISTRATION_KEY
 from rejax.algos.exploration.defs import Trajectory, ExplorationBonusParams, flatten_batch
 from rejax.algos.exploration.rnd import RNDParams
-from rejax.algos.exploration.rnk import RNKParams
+from rejax.algos.exploration.rnk import RNKParams, compute_effective_dimension
 from rejax.algos.exploration.utils import update_bonus, compute_bonus, create_exploration_bonus
 from rejax.algos.mixins import (
     NormalizeObservationsMixin,
@@ -72,6 +72,8 @@ class PPO(OnPolicyMixin, NormalizeObservationsMixin, NormalizeRewardsMixin, Algo
     ext_coef: float = struct.field(pytree_node=True, default=10.)
     int_coef: float = struct.field(pytree_node=True, default=1.)
     int_gamma: float = struct.field(pytree_node=True, default=0.99)  # Separate discount for intrinsic rewards
+
+    num_iterations_obs_norm_init: int = struct.field(pytree_node=False, default=1)
 
     # Flag for normalizing intrinsic rewards
     normalize_intrinsic_rewards: bool = struct.field(pytree_node=False, default=True)
@@ -149,6 +151,44 @@ class PPO(OnPolicyMixin, NormalizeObservationsMixin, NormalizeRewardsMixin, Algo
             "int_gamma": int_gamma,
             "normalize_intrinsic_rewards": normalize_intrinsic_rewards
         }
+
+    def warmup_obs_normalization(self, ts, num_warmup_steps):
+        """Warm up observation normalization by collecting observations without training."""
+
+        def warmup_step(ts, unused):
+            # Get random action for environment stepping
+            rng, new_rng = jax.random.split(ts.rng)
+            ts = ts.replace(rng=rng)
+            rng_steps, rng_action = jax.random.split(new_rng, 2)
+            rng_steps = jax.random.split(rng_steps, self.num_envs)
+
+            # Sample random actions (we don't use policy during warm-up)
+            action_space = self.env.action_space(self.env_params)
+            if self.discrete:
+                action = jax.random.randint(rng_action, (self.num_envs,), 0, action_space.n)
+            else:
+                low = action_space.low
+                high = action_space.high
+                action = jax.random.uniform(
+                    rng_action, (self.num_envs, *action_space.shape),
+                    minval=low, maxval=high
+                )
+
+            # Step environment
+            t = self.vmap_step(rng_steps, ts.env_state, action, self.env_params)
+            next_obs, env_state, _, done, _ = t
+
+            # Update observation normalization statistics
+            if self.normalize_observations:
+                obs_rms_state, _ = self.update_and_normalize_obs(
+                    ts.obs_rms_state, next_obs
+                )
+                ts = ts.replace(obs_rms_state=obs_rms_state)
+
+            return ts, next_obs
+
+        ts, observations = jax.lax.scan(warmup_step, ts, None, num_warmup_steps)
+        return ts.obs_rms_state, observations
 
     @register_init
     def initialize_network_params(self, rng):
@@ -562,6 +602,21 @@ class PPO(OnPolicyMixin, NormalizeObservationsMixin, NormalizeRewardsMixin, Algo
         ts = self.init_state(rng)
 
         ts = ts.replace(seed=seed)
+
+        if self.normalize_observations and self.num_iterations_obs_norm_init > 0:
+            obs_rms_state, observations = self.warmup_obs_normalization(ts, self.num_steps * self.num_iterations_obs_norm_init)
+            ts = ts.replace(obs_rms_state=obs_rms_state)
+            if self.bonus_type == "rnk" and self.bonus_params.length_scale is None and self.bonus_params.use_effective_dim:
+                X = self.normalize_obs(obs_rms_state, observations).reshape(
+                    (observations.shape[0] * observations.shape[1], *observations.shape[2:])
+                )
+                ts = ts.replace(
+                    exploration_bonus=ts.exploration_bonus.replace(
+                        state=ts.exploration_bonus.state.replace(
+                            length_scale=jnp.sqrt(compute_effective_dimension(X, self.bonus_params.reg))
+                        )
+                    )
+                )
 
         if not self.skip_initial_evaluation:
             initial_evaluation = self.eval_callback(self, ts, ts.rng)
