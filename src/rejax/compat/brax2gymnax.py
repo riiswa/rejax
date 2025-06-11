@@ -15,9 +15,18 @@ def create_brax(env_name, **kwargs):
     if env_name.startswith('sparse-'):
         is_sparse = True
         env_name = env_name.replace('sparse-', '')
+        if env_name == "ant":
+            milestone_distance = 5.
+        elif env_name == "halfcheetah":
+            milestone_distance = 15.
+        else:
+            milestone_distance = 1.
+    else:
+        is_sparse = False
     env = create(env_name, **kwargs)
-    env = MilestoneRewardWrapper(env)
-    env = Brax2GymnaxEnv(env)
+    if is_sparse:
+        env = MilestoneRewardWrapper(env)
+    env = Brax2GymnaxEnv(env, milestone_distance=milestone_distance)
     return env, env.default_params
 
 

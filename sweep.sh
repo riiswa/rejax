@@ -4,11 +4,11 @@
 #SBATCH --error=error.log          # Error file
 #SBATCH --time=08:00:00            # Maximum run time
 #SBATCH --nodes=1                  # Number of nodes
-#SBATCH --cpus-per-task=8         # Number of CPU cores per task
+#SBATCH --cpus-per-task=24         # Number of CPU cores per task
 #SBATCH --constraint=a100
 
 # Maximum number of parallel jobs (consider reducing for GPU memory)
-MAX_PARALLEL=4  # 2 per GPU instead of 4 per GPU
+MAX_PARALLEL=10  # 2 per GPU instead of 4 per GPU
 # Alternative: MAX_PARALLEL=6  # 3 per GPU
 
 # Define bonus types
@@ -18,26 +18,21 @@ BONUS_TYPES=("rnk" "rnd" "none")
 ENVS=(
   "MountainCar-v0"
   "Acrobot-v1"
+  "Asterix-MinAtar"
+  "Breakout-MinAtar"
+  "Freeway-MinAtar"
+  "SpaceInvaders-MinAtar"
   "navix/Navix-Empty-8x8-v0"
   "navix/Navix-Empty-16x16-v0"
   "navix/Navix-DoorKey-5x5-v0"
   "navix/Navix-DoorKey-6x6-v0"
   "navix/Navix-DoorKey-8x8-v0"
   "navix/Navix-DoorKey-16x16-v0"
-  "navix/Navix-KeyCorridorS3R1-v0"
-  "navix/Navix-KeyCorridorS3R2-v0"
-  "navix/Navix-KeyCorridorS3R3-v0"
-  "navix/Navix-KeyCorridorS4R3-v0"
-  "navix/Navix-KeyCorridorS5R3-v0"
-  "navix/Navix-KeyCorridorS6R3-v0"
+  "navix/Navix-FourRooms-v0"
   "navix/Navix-SimpleCrossingS9N1-v0"
   "navix/Navix-SimpleCrossingS9N2-v0"
   "navix/Navix-SimpleCrossingS9N3-v0"
   "navix/Navix-SimpleCrossingS11N5-v0"
-  "navix/Navix-LavaCrossingS9N1-v0"
-  "navix/Navix-LavaCrossingS9N2-v0"
-  "navix/Navix-LavaCrossingS9N3-v0"
-  "navix/Navix-LavaCrossingS11N5-v0"
   "navix/Navix-DistShift1-v0"
   "navix/Navix-DistShift2-v0"
   "navix/Navix-LavaGapS5-v0"
@@ -46,15 +41,14 @@ ENVS=(
   "navix/Navix-GoToDoor-5x5-v0"
   "navix/Navix-GoToDoor-6x6-v0"
   "navix/Navix-GoToDoor-8x8-v0"
-  "brax/sparse-ant"
-  "brax/sparse-halfcheetah"
-  "brax/sparse-walker2d"
-  "brax/sparse-hopper"
-  "brax/sparse-swimmer"
   "custom/pointmaze-umaze-v0"
   "custom/pointmaze-medium-v0"
   "custom/pointmaze-large-v0"
   "custom/pointmaze-giant-v0"
+  "brax/sparse-ant"
+  "brax/sparse-halfcheetah"
+  "brax/sparse-walker2d"
+  "brax/sparse-hopper"
 )
 
 # Function to wait for a job slot to become available
@@ -70,7 +64,13 @@ run_experiment() {
   local env=$2
   local gpu_id=$3
   echo "Starting: bonus_type=$bonus_type, env=$env on GPU $gpu_id"
-  CUDA_VISIBLE_DEVICES=$gpu_id XLA_PYTHON_CLIENT_PREALLOCATE=false python experiment.py training.bonus_type=$bonus_type training.env=$env
+  if [[ "$env" == *"sparse"* ]]; then
+    CUDA_VISIBLE_DEVICES=$gpu_id XLA_PYTHON_CLIENT_PREALLOCATE=false python experiment.py training.bonus_type=$bonus_type training.env=$env training.total_timesteps=5_000_000
+  elif [[ "$env" == *"navix"* ]]; then
+    CUDA_VISIBLE_DEVICES=$gpu_id XLA_PYTHON_CLIENT_PREALLOCATE=false python experiment.py training.bonus_type=$bonus_type training.env=$env training.max_grad_norm=10
+  else
+    CUDA_VISIBLE_DEVICES=$gpu_id XLA_PYTHON_CLIENT_PREALLOCATE=false python experiment.py training.bonus_type=$bonus_type training.env=$env
+  fi
   echo "Completed: bonus_type=$bonus_type, env=$env on GPU $gpu_id"
 }
 
