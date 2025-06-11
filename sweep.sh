@@ -49,6 +49,8 @@ ENVS=(
   "brax/sparse-halfcheetah"
   "brax/sparse-walker2d"
   "brax/sparse-hopper"
+  "brax/pusher"
+  "reacher.py"
 )
 
 # Function to wait for a job slot to become available
