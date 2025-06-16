@@ -651,7 +651,7 @@ if __name__ == "__main__":
     from aim import Run
 
     config = {
-        "env": "navix/Navix-LavaGapS7-v0",
+        "env": "brax/pusher",
         "bonus_type": "rnk",
         "normalize_observations": True,
         "normalize_intrinsic_rewards": True,
@@ -704,6 +704,6 @@ if __name__ == "__main__":
     train_fn = jax.jit(ppo.train_with_seed)
     vmapped_train_fn = jax.vmap(train_fn)
 
-    n_seeds = 8
+    n_seeds = 1
 
     train_state, (episode_lengths, returns) = vmapped_train_fn(jnp.arange(n_seeds))

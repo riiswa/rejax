@@ -1,14 +1,38 @@
 import warnings
 from copy import copy
+from typing import Optional
 
-from brax.envs import Env as BraxEnv
+from brax.envs import Env as BraxEnv, Env
 from brax.envs import create
+from brax.envs.wrappers import training
 from flax import struct
 from gymnax.environments import spaces
 from gymnax.environments.environment import Environment as GymnaxEnv
 from jax import numpy as jnp
 
 from rejax.compat.wrappers import MilestoneRewardWrapper
+
+from rejax.compat.envs.reacher import Reacher
+from rejax.compat.envs.pusher import Pusher
+
+def custom_create(
+    env: Env,
+    episode_length: int = 1000,
+    action_repeat: int = 1,
+    auto_reset: bool = True,
+    batch_size: Optional[int] = None,
+    **kwargs,
+) -> Env:
+  env = env
+
+  if episode_length is not None:
+    env = training.EpisodeWrapper(env, episode_length, action_repeat)
+  if batch_size:
+    env = training.VmapWrapper(env, batch_size)
+  if auto_reset:
+    env = training.AutoResetWrapper(env)
+
+  return env
 
 
 def create_brax(env_name, **kwargs):
@@ -18,15 +42,23 @@ def create_brax(env_name, **kwargs):
         if env_name == "ant":
             milestone_distance = 5.
         elif env_name == "halfcheetah":
-            milestone_distance = 15.
+            milestone_distance = 10.
         else:
             milestone_distance = 1.
     else:
         is_sparse = False
-    env = create(env_name, **kwargs)
+        milestone_distance = 0.
+
+    if env_name == 'reacher':
+        env = custom_create(Reacher(**kwargs))
+    elif env_name == 'pusher':
+        env = custom_create(Pusher(**kwargs))
+    else:
+        env = create(env_name, **kwargs)
+
     if is_sparse:
-        env = MilestoneRewardWrapper(env)
-    env = Brax2GymnaxEnv(env, milestone_distance=milestone_distance)
+        env = MilestoneRewardWrapper(env, milestone_distance=milestone_distance)
+    env = Brax2GymnaxEnv(env)
     return env, env.default_params
 
 
