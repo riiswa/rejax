@@ -8,6 +8,8 @@ import jax.numpy as jnp
 from rejax.algos.exploration.defs import Trajectory
 from rejax.algos.exploration.rnd import update_rnd, compute_rnd_bonus
 from rejax.algos.exploration.rnk import update_rnk, compute_rnk_bonus
+from rejax.algos.exploration.drnd import update_drnd, compute_drnd_bonus
+from rejax.algos.exploration.hash import update_hash, compute_hash_bonus
 
 # -----------------------------------------------------------------------------
 # Factory Function
@@ -29,6 +31,12 @@ def create_exploration_bonus(
     elif bonus_type == "rnk":
         from rejax.algos.exploration.rnk import init_rnk
         return init_rnk(key, obs_size, bonus_params)
+    elif bonus_type == "drnd":
+        from rejax.algos.exploration.drnd import init_drnd
+        return init_drnd(key, obs_size, bonus_params)
+    elif bonus_type == "hash":
+        from rejax.algos.exploration.hash import init_hash
+        return init_hash(key, obs_size, bonus_params)
     else:
         raise ValueError(f"Unknown exploration bonus type: {bonus_type}")
 
@@ -43,6 +51,10 @@ def update_bonus(
         return update_rnd(bonus, batch, key)
     elif bonus_type == "rnk":
         return update_rnk(bonus, batch, key)
+    elif bonus_type == "drnd":
+        return update_drnd(bonus, batch, key)
+    elif bonus_type == "hash":
+        return update_hash(bonus, batch, key)
     else:
         raise ValueError(f"Unknown exploration bonus type: {bonus_type}")
 
@@ -57,6 +69,9 @@ def compute_bonus(
         return jax.vmap(compute_rnd_bonus, in_axes=(None, 0, 0))(bonus, observations, actions)
     elif bonus_type == "rnk":
         return jax.vmap(compute_rnk_bonus, in_axes=(None, 0, 0))(bonus, observations, actions)
+    elif bonus_type == "drnd":
+        return jax.vmap(compute_drnd_bonus, in_axes=(None, 0, 0))(bonus, observations, actions)
+    elif bonus_type == "hash":
+        return jax.vmap(compute_hash_bonus, in_axes=(None, 0, 0))(bonus, observations, actions)
     else:
         raise ValueError(f"Unknown exploration bonus type: {bonus_type}")
-

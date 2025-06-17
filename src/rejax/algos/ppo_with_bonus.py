@@ -25,6 +25,10 @@ from rejax.algos.mixins import (
 )
 from rejax.networks import DiscretePolicy, GaussianPolicy, VNetwork
 
+from rejax.algos.exploration.drnd import DRNDParams
+
+from rejax.algos.exploration.hash import HashParams
+
 
 # -----------------------------------------------------------------------------
 # Data structures for dual-reward setting
@@ -127,6 +131,10 @@ class PPO(OnPolicyMixin, NormalizeObservationsMixin, NormalizeRewardsMixin, Algo
             bonus_params = RNDParams(**bonus_config)
         elif bonus_type == "rnk":
             bonus_params = RNKParams(**bonus_config)
+        elif bonus_type == "drnd":  # Add DRND support
+            bonus_params = DRNDParams(**bonus_config)
+        elif bonus_type == "hash":  # Add DRND support
+            bonus_params = HashParams(**bonus_config)
         elif bonus_type != "none":
             raise ValueError(f"Unknown exploration bonus type: {bonus_type}")
         else:
@@ -651,8 +659,8 @@ if __name__ == "__main__":
     from aim import Run
 
     config = {
-        "env": "brax/pusher",
-        "bonus_type": "rnk",
+        "env": "custom/pointmaze-large-v0",
+        "bonus_type": "hash",
         "normalize_observations": True,
         "normalize_intrinsic_rewards": True,
         "total_timesteps": 1_000_000,
