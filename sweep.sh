@@ -12,7 +12,7 @@ MAX_PARALLEL=2  # 2 per GPU instead of 4 per GPU
 # Alternative: MAX_PARALLEL=6  # 3 per GPU
 
 # Define bonus types
-BONUS_TYPES=("rnk" "rnd" "none")
+BONUS_TYPES=("rnk" "rnd" "vime" "hash" "none")
 
 # Define environments
 ENVS=(

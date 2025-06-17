@@ -24,10 +24,9 @@ from rejax.algos.mixins import (
     RewardRMSState
 )
 from rejax.networks import DiscretePolicy, GaussianPolicy, VNetwork
-
 from rejax.algos.exploration.drnd import DRNDParams
-
 from rejax.algos.exploration.hash import HashParams
+from rejax.algos.exploration.vime import VIMEParams
 
 
 # -----------------------------------------------------------------------------
@@ -135,6 +134,8 @@ class PPO(OnPolicyMixin, NormalizeObservationsMixin, NormalizeRewardsMixin, Algo
             bonus_params = DRNDParams(**bonus_config)
         elif bonus_type == "hash":  # Add DRND support
             bonus_params = HashParams(**bonus_config)
+        elif bonus_type == "vime":
+            bonus_params = VIMEParams(**bonus_config)  # ← Added this case
         elif bonus_type != "none":
             raise ValueError(f"Unknown exploration bonus type: {bonus_type}")
         else:
@@ -240,11 +241,20 @@ class PPO(OnPolicyMixin, NormalizeObservationsMixin, NormalizeRewardsMixin, Algo
             )
 
         # Initialize exploration bonus if specified
-        exploration_bonus = None
+        # Added action_size calculation for VIME:
         if self.bonus_type != "none" and self.bonus_params is not None:
+            # Calculate action size for VIME
+            action_space = self.env.action_space(self.env_params)
+            if self.discrete:
+                action_size = 1  # ← Added discrete case
+            else:
+                action_size = np.prod(action_space.shape)  # ← Added continuous case
+
             exploration_bonus = create_exploration_bonus(
-                self.bonus_type, rng_bonus, obs_size, self.bonus_params
+                self.bonus_type, rng_bonus, obs_size, action_size, self.bonus_params  # ← Added action_size
             )
+        else:
+            exploration_bonus = None
 
         return {
             "actor_ts": actor_ts,
@@ -400,12 +410,35 @@ class PPO(OnPolicyMixin, NormalizeObservationsMixin, NormalizeRewardsMixin, Algo
 
         ts, trajectories = jax.lax.scan(env_step, ts, None, self.num_steps)
 
-        # Calculate intrinsic reward (exploration bonus)
+        # Added VIME-specific logic for next_observations and random key:
         if hasattr(ts, "exploration_bonus") and ts.exploration_bonus is not None:
-            # Compute bonus
-            trajectories = trajectories.replace(
-                intrinsic_reward=compute_bonus(self.bonus_type, ts.exploration_bonus, trajectories.obs, trajectories.action)
-            )
+            if self.bonus_type == "vime":
+                # For VIME, we need next observations
+                obs_flat = flatten_batch(trajectories.obs)
+                next_obs_flat = jnp.roll(obs_flat, -1, axis=0)  # ← Added
+                next_obs_flat = next_obs_flat.reshape(trajectories.obs.shape)  # ← Added
+
+                # Generate random key for VIME
+                rng, bonus_key = jax.random.split(ts.rng)  # ← Added
+                ts = ts.replace(rng=rng)  # ← Added
+
+                # Compute VIME bonus
+                intrinsic_rewards = compute_bonus(
+                    self.bonus_type,
+                    ts.exploration_bonus,
+                    trajectories.obs,
+                    trajectories.action,
+                    next_observations=next_obs_flat,  # ← Added
+                    key=bonus_key  # ← Added
+                )
+            else:
+                # For RND and RNK (unchanged)
+                intrinsic_rewards = compute_bonus(
+                    self.bonus_type,
+                    ts.exploration_bonus,
+                    trajectories.obs,
+                    trajectories.action
+                )
 
         if self.logging_callback is not None:
             jax.experimental.io_callback(
@@ -660,7 +693,7 @@ if __name__ == "__main__":
 
     config = {
         "env": "custom/pointmaze-large-v0",
-        "bonus_type": "hash",
+        "bonus_type": "vime",
         "normalize_observations": True,
         "normalize_intrinsic_rewards": True,
         "total_timesteps": 1_000_000,
