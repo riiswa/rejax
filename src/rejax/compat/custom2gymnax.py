@@ -1,5 +1,5 @@
-from src.rejax.compat.envs.cartpole_swing_up import CartPoleSwingUp
-from src.rejax.compat.envs.point_maze import PointMazeEnv
+from rejax.compat.envs.cartpole_swing_up import CartPoleSwingUp
+from rejax.compat.envs.point_maze import PointMazeEnv
 
 
 def create_custom(env_name, **kwargs):
