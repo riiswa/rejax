@@ -15,23 +15,29 @@ sns.set_palette("husl")
 ALGORITHM_COLORS = {
     'PPO': '#2E86AB',  # Blue
     'PPO+RND': '#A23B72',  # Purple/Magenta
-    'PPO+RFIG': '#F18F01'  # Orange (baseline)
+    'PPO+RFIG': '#F18F01',  # Orange (baseline)
+    'PPO+VIME': '#28A745',  # Green
+    'PPO+#Explo': '#DC3545'  # Red
 }
 
 ALGORITHM_MARKERS = {
     'PPO': 'o',  # Circle
     'PPO+RND': 's',  # Square
-    'PPO+RFIG': '^'  # Triangle (baseline)
+    'PPO+RFIG': '^',  # Triangle (baseline)
+    'PPO+VIME': 'D',  # Diamond
+    'PPO+#Explo': '+'  # Plus
 }
 
 ALGORITHM_MAPPING = {
     'none': 'PPO',
     'rnd': 'PPO+RND',
-    'rnk': 'PPO+RFIG'
+    'rnk': 'PPO+RFIG',
+    'vime': 'PPO+VIME',
+    'hash': 'PPO+#Explo'
 }
 
 # Define consistent order for algorithms (baseline last for emphasis)
-ALGORITHM_ORDER = ['PPO', 'PPO+RND', 'PPO+RFIG']
+ALGORITHM_ORDER = ['PPO', 'PPO+RND', 'PPO+VIME', 'PPO+#Explo', 'PPO+RFIG']
 
 
 def parse_filename(filename: str) -> Tuple[str, str]:
@@ -51,7 +57,7 @@ def parse_filename(filename: str) -> Tuple[str, str]:
         environment = '_'.join(parts[:-3])
     else:
         # Fallback parsing
-        match = re.match(r'(.+)_(none|rnd|rnk)_seed0_returns', name)
+        match = re.match(r'(.+)_(none|rnd|rnk|vime|hash)_seed0_returns', name)
         if match:
             environment, algorithm = match.groups()
         else:
@@ -209,7 +215,7 @@ def create_standalone_legend(output_dir: str):
     """
     Create a standalone horizontal legend and save as PDF.
     """
-    fig, ax = plt.subplots(1, 1, figsize=(6, 1))
+    fig, ax = plt.subplots(1, 1, figsize=(8, 1))
 
     # Create dummy plots to generate legend
     for display_name in ALGORITHM_ORDER:
