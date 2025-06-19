@@ -13,19 +13,19 @@ sns.set_palette("husl")
 
 # Define consistent colors and markers for algorithms
 ALGORITHM_COLORS = {
-    'PPO': '#2E86AB',  # Blue
-    'PPO+RND': '#A23B72',  # Purple/Magenta
-    'PPO+RFIG': '#F18F01',  # Orange (baseline)
-    'PPO+VIME': '#28A745',  # Green
-    'PPO+#Explo': '#DC3545'  # Red
+    'PPO': '#2C2C2C',          # Dark gray (neutral baseline)
+    'PPO+RFIG': '#FF6B35',     # Vibrant orange-red (YOUR ALGORITHM - stands out!)
+    'PPO+RND': '#4A90E2',      # Clean blue
+    'PPO+VIME': '#7ED321',     # Fresh green
+    'PPO+#Explo': '#9013FE'    # Purple
 }
 
 ALGORITHM_MARKERS = {
-    'PPO': 'o',  # Circle
-    'PPO+RND': 's',  # Square
-    'PPO+RFIG': '^',  # Triangle (baseline)
-    'PPO+VIME': 'D',  # Diamond
-    'PPO+#Explo': '+'  # Plus
+    'PPO': 'o',           # Circle (simple baseline)
+    'PPO+RFIG': '*',      # Star (YOUR ALGORITHM - distinctive!)
+    'PPO+RND': 's',       # Square
+    'PPO+VIME': '^',      # Triangle up
+    'PPO+#Explo': 'D'     # Diamond
 }
 
 ALGORITHM_MAPPING = {
