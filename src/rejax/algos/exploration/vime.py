@@ -76,6 +76,7 @@ class DynamicsBNN(nn.Module):
 
     @nn.compact
     def __call__(self, state, action, sample_weights=True):
+        state = state.reshape((state.shape[0], -1))
         # Concatenate state and action
         x = jnp.concatenate([state, action], axis=-1)
 

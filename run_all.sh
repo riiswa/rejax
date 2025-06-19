@@ -1,1 +1,1 @@
-for bonus in rnk rnd hash vime none; do sbatch --constraint=p100 run.sh "$bonus"; done
+for bonus in rnk rnd hash vime none; do sbatch --constraint=a100 run.sh "$bonus"; done

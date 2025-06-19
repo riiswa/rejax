@@ -439,6 +439,7 @@ class PPO(OnPolicyMixin, NormalizeObservationsMixin, NormalizeRewardsMixin, Algo
                     trajectories.obs,
                     trajectories.action
                 )
+            trajectories = trajectories.replace(intrinsic_reward=intrinsic_rewards)
 
         if self.logging_callback is not None:
             jax.experimental.io_callback(
