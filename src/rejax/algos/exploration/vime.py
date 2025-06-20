@@ -75,28 +75,28 @@ class DynamicsBNN(nn.Module):
     prior_scale: float = 1.0
 
     @nn.compact
-def __call__(self, state, action, sample_weights=True):
-    # Flatten observations and actions like in RND/RNK
-    state = state.reshape((state.shape[0], -1))
-    action = action.reshape((action.shape[0], -1))
+    def __call__(self, state, action, sample_weights=True):
+        # Flatten observations and actions like in RND/RNK
+        state = state.reshape((state.shape[0], -1))
+        action = action.reshape((action.shape[0], -1))
 
-    # Concatenate state and action
-    x = jnp.concatenate([state, action], axis=-1)
+        # Concatenate state and action
+        x = jnp.concatenate([state, action], axis=-1)
 
-    # CRITICAL FIX: Use actual concatenated size, not preset obs_dim + action_dim
-    actual_input_size = x.shape[-1]  # This is the real flattened size
+        # CRITICAL FIX: Use actual concatenated size, not preset obs_dim + action_dim
+        actual_input_size = x.shape[-1]  # This is the real flattened size
 
-    # Hidden layers
-    for i, hidden_size in enumerate(self.hidden_layer_sizes):
-        # Use actual_input_size for first layer, then hidden_size for subsequent layers
-        input_size = actual_input_size if i == 0 else self.hidden_layer_sizes[i-1]
-        x = BayesianLinear(input_size, hidden_size, self.prior_scale)(x, sample_weights)
-        x = jnp.tanh(x)  # Use tanh as in the paper
+        # Hidden layers
+        for i, hidden_size in enumerate(self.hidden_layer_sizes):
+            # Use actual_input_size for first layer, then hidden_size for subsequent layers
+            input_size = actual_input_size if i == 0 else self.hidden_layer_sizes[i-1]
+            x = BayesianLinear(input_size, hidden_size, self.prior_scale)(x, sample_weights)
+            x = jnp.tanh(x)  # Use tanh as in the paper
 
-    # Output layer - predict flattened next state
-    output_size = state.shape[-1]  # Match the flattened state size
-    x = BayesianLinear(self.hidden_layer_sizes[-1], output_size, self.prior_scale)(x, sample_weights)
-    return x
+        # Output layer - predict flattened next state
+        output_size = state.shape[-1]  # Match the flattened state size
+        x = BayesianLinear(self.hidden_layer_sizes[-1], output_size, self.prior_scale)(x, sample_weights)
+        return x
 
 
 def compute_kl_divergence(params_new, params_old, prior_scale):
