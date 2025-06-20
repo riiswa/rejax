@@ -202,7 +202,8 @@ def update_hash(
         )
 
         # Reconstruction loss
-        recon_loss = jnp.mean(jnp.square(outputs['reconstructed'] - observations))
+        observations_flat = observations.reshape(observations.shape[0], -1)
+        recon_loss = jnp.mean(jnp.square(outputs['reconstructed'] - observations_flat))
 
         # Binary regularization loss (encourage binary values)
         code_probs = outputs['code_probs']
