@@ -1,4 +1,4 @@
-"""VIME (Variational Information Maximizing Exploration) implementation."""
+"""VIME (Variational Information Maximizing Exploration) implementation - FIXED."""
 
 from typing import Any, Callable, Dict, Optional, Tuple
 import jax
@@ -34,15 +34,17 @@ class VIMEParams(ExplorationBonusParams):
 
 class BayesianLinear(nn.Module):
     """Bayesian linear layer with fully factorized Gaussian weights."""
-    input_size: int
     features: int
     prior_scale: float = 1.0
 
     @nn.compact
     def __call__(self, x, sample_weights=True):
+        # Let Flax infer input size automatically
+        input_size = x.shape[-1]
+
         # Weight parameters: mean and rho (where σ = log(1 + exp(rho)))
-        w_mean = self.param('w_mean', nn.initializers.normal(0.1), (self.input_size, self.features))
-        w_rho = self.param('w_rho', nn.initializers.constant(-3.0), (self.input_size, self.features))
+        w_mean = self.param('w_mean', nn.initializers.normal(0.1), (input_size, self.features))
+        w_rho = self.param('w_rho', nn.initializers.constant(-3.0), (input_size, self.features))
 
         # Bias parameters
         b_mean = self.param('b_mean', nn.initializers.zeros, (self.features,))
@@ -84,15 +86,13 @@ class DynamicsBNN(nn.Module):
         # Store sizes for output layer
         state_size = state.shape[-1]
 
-        # Hidden layers - let Flax figure out sizes dynamically
-        current_size = x.shape[-1]  # Input size
+        # Hidden layers
         for i, hidden_size in enumerate(self.hidden_layer_sizes):
-            x = BayesianLinear(current_size, hidden_size, self.prior_scale)(x, sample_weights)
+            x = BayesianLinear(hidden_size, self.prior_scale)(x, sample_weights)
             x = jnp.tanh(x)
-            current_size = hidden_size
 
         # Output layer - predict next state (same size as input state)
-        x = BayesianLinear(current_size, state_size, self.prior_scale)(x, sample_weights)
+        x = BayesianLinear(state_size, self.prior_scale)(x, sample_weights)
         return x
 
 
@@ -169,14 +169,15 @@ class VIMEBonus:
 def init_vime(key: jnp.ndarray, obs_size: int, action_size: int, params: VIMEParams) -> VIMEBonus:
     """Initialize VIME exploration bonus."""
 
-    # Create the dynamics BNN (no preset dimensions)
+    # Create the dynamics BNN
     dynamics_net = DynamicsBNN(
         hidden_layer_sizes=params.hidden_layer_sizes,
         prior_scale=params.prior_scale
     )
 
     # Initialize with flattened dummy inputs
-    dummy_obs = jnp.zeros((1, obs_size))  # Already flattened
+    # obs_size represents the total flattened observation size
+    dummy_obs = jnp.zeros((1, obs_size))
     dummy_action = jnp.zeros((1, action_size))
 
     bnn_params = dynamics_net.init(
@@ -211,6 +212,9 @@ def compute_vime_bonus(
 ) -> jnp.ndarray:
     """Compute VIME bonus (information gain)."""
 
+    # Store original shape for reshaping output
+    original_shape = observations.shape[:2]  # (num_steps, num_envs)
+
     # Store old parameters
     old_params = bonus.state.bnn_params
 
@@ -220,10 +224,18 @@ def compute_vime_bonus(
         prior_scale=bonus.params.prior_scale
     )
 
-    # Flatten all inputs for consistency
-    obs_flat = observations.reshape(observations.shape[0], -1)
-    actions_flat = actions.reshape(actions.shape[0], -1)
-    next_obs_flat = next_observations.reshape(next_observations.shape[0], -1)
+    # Use flatten_batch to properly handle batch dimensions
+    # This converts (num_steps, num_envs, *obs_shape) -> (batch_size, *obs_shape)
+    obs_batch = flatten_batch(observations)  # (4096, 10, 10, 4) for example
+    actions_batch = flatten_batch(actions)   # (4096, action_dim)
+    next_obs_batch = flatten_batch(next_observations)  # (4096, 10, 10, 4)
+
+    # Now flatten observation dimensions for neural network input
+    # (batch_size, *obs_shape) -> (batch_size, obs_flat_dim)
+    batch_size = obs_batch.shape[0]
+    obs_flat = obs_batch.reshape(batch_size, -1)  # (4096, 400) for (10,10,4) obs
+    next_obs_flat = next_obs_batch.reshape(batch_size, -1)
+    actions_flat = actions_batch.reshape(batch_size, -1)
 
     # Define loss function for single step update
     def loss_fn(params):
@@ -281,9 +293,9 @@ def compute_vime_bonus(
         bonus.params.prior_scale
     )
 
-    # Return KL divergence as intrinsic reward (scaling handled by int_coef in PPO)
-    batch_size = observations.shape[0]
-    return jnp.full((batch_size,), kl_div)
+    # Return KL divergence as intrinsic reward, reshaped to original batch shape
+    bonuses = jnp.full((batch_size,), kl_div)
+    return bonuses.reshape(original_shape)
 
 
 def update_vime(
@@ -293,21 +305,22 @@ def update_vime(
 ) -> Tuple[VIMEBonus, Dict[str, Any]]:
     """Update VIME dynamics model."""
 
-    # Flatten batch data
-    observations = flatten_batch(batch.obs)
-    actions = flatten_batch(batch.action)
+    # Use flatten_batch to properly handle batch dimensions
+    observations = flatten_batch(batch.obs)  # (batch_size, *obs_shape)
+    actions = flatten_batch(batch.action)    # (batch_size, *action_shape)
     next_observations = jnp.roll(observations, -1, axis=0)  # Next observations
+
+    # Flatten observation dimensions for neural network
+    batch_size = observations.shape[0]
+    obs_flat = observations.reshape(batch_size, -1)
+    actions_flat = actions.reshape(batch_size, -1)
+    next_obs_flat = next_observations.reshape(batch_size, -1)
 
     # Create dynamics network (same as initialization)
     dynamics_net = DynamicsBNN(
         hidden_layer_sizes=bonus.params.hidden_layer_sizes,
         prior_scale=bonus.params.prior_scale
     )
-
-    # Flatten inputs for consistency
-    obs_flat = observations.reshape(observations.shape[0], -1)
-    actions_flat = actions.reshape(actions.shape[0], -1)
-    next_obs_flat = next_observations.reshape(next_observations.shape[0], -1)
 
     # Define loss function on full batch
     def loss_fn(params):
