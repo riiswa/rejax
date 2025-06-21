@@ -70,32 +70,29 @@ class BayesianLinear(nn.Module):
 class DynamicsBNN(nn.Module):
     """Bayesian Neural Network for modeling environment dynamics."""
     hidden_layer_sizes: Tuple[int, ...]
-    obs_dim: int
-    action_dim: int
     prior_scale: float = 1.0
 
     @nn.compact
     def __call__(self, state, action, sample_weights=True):
-        # Flatten observations and actions like in RND/RNK
+        # Flatten observations and actions
         state = state.reshape((state.shape[0], -1))
         action = action.reshape((action.shape[0], -1))
 
         # Concatenate state and action
         x = jnp.concatenate([state, action], axis=-1)
 
-        # CRITICAL FIX: Use actual concatenated size, not preset obs_dim + action_dim
-        actual_input_size = x.shape[-1]  # This is the real flattened size
+        # Store sizes for output layer
+        state_size = state.shape[-1]
 
-        # Hidden layers
+        # Hidden layers - let Flax figure out sizes dynamically
+        current_size = x.shape[-1]  # Input size
         for i, hidden_size in enumerate(self.hidden_layer_sizes):
-            # Use actual_input_size for first layer, then hidden_size for subsequent layers
-            input_size = actual_input_size if i == 0 else self.hidden_layer_sizes[i-1]
-            x = BayesianLinear(input_size, hidden_size, self.prior_scale)(x, sample_weights)
-            x = jnp.tanh(x)  # Use tanh as in the paper
+            x = BayesianLinear(current_size, hidden_size, self.prior_scale)(x, sample_weights)
+            x = jnp.tanh(x)
+            current_size = hidden_size
 
-        # Output layer - predict flattened next state
-        output_size = state.shape[-1]  # Match the flattened state size
-        x = BayesianLinear(self.hidden_layer_sizes[-1], output_size, self.prior_scale)(x, sample_weights)
+        # Output layer - predict next state (same size as input state)
+        x = BayesianLinear(current_size, state_size, self.prior_scale)(x, sample_weights)
         return x
 
 
@@ -172,17 +169,16 @@ class VIMEBonus:
 def init_vime(key: jnp.ndarray, obs_size: int, action_size: int, params: VIMEParams) -> VIMEBonus:
     """Initialize VIME exploration bonus."""
 
-    # Create the dynamics BNN
+    # Create the dynamics BNN (no preset dimensions)
     dynamics_net = DynamicsBNN(
         hidden_layer_sizes=params.hidden_layer_sizes,
-        obs_dim=obs_size,
-        action_dim=action_size,
         prior_scale=params.prior_scale
     )
 
-    # Initialize parameters
-    dummy_obs = jnp.zeros((1, obs_size))
+    # Initialize with flattened dummy inputs
+    dummy_obs = jnp.zeros((1, obs_size))  # Already flattened
     dummy_action = jnp.zeros((1, action_size))
+
     bnn_params = dynamics_net.init(
         {'params': key, 'weights': key, 'biases': key},
         dummy_obs, dummy_action, sample_weights=True
@@ -218,13 +214,16 @@ def compute_vime_bonus(
     # Store old parameters
     old_params = bonus.state.bnn_params
 
-    # Create dynamics network
+    # Create dynamics network (same as initialization)
     dynamics_net = DynamicsBNN(
         hidden_layer_sizes=bonus.params.hidden_layer_sizes,
-        obs_dim=bonus.obs_dim,
-        action_dim=bonus.action_dim,
         prior_scale=bonus.params.prior_scale
     )
+
+    # Flatten all inputs for consistency
+    obs_flat = observations.reshape(observations.shape[0], -1)
+    actions_flat = actions.reshape(actions.shape[0], -1)
+    next_obs_flat = next_observations.reshape(next_observations.shape[0], -1)
 
     # Define loss function for single step update
     def loss_fn(params):
@@ -233,7 +232,7 @@ def compute_vime_bonus(
 
         def single_prediction(rng_key):
             pred = dynamics_net.apply(
-                params, observations, actions,
+                params, obs_flat, actions_flat,
                 sample_weights=True,
                 rngs={'weights': rng_key, 'biases': rng_key}
             )
@@ -247,7 +246,7 @@ def compute_vime_bonus(
         mean_pred = jnp.mean(predictions, axis=0)
 
         # Negative log likelihood (reconstruction loss)
-        mse_loss = jnp.mean((mean_pred - next_observations) ** 2)
+        mse_loss = jnp.mean((mean_pred - next_obs_flat) ** 2)
 
         # KL divergence to prior (regularization)
         kl_loss = 0.0
@@ -283,7 +282,6 @@ def compute_vime_bonus(
     )
 
     # Return KL divergence as intrinsic reward (scaling handled by int_coef in PPO)
-    # Return same reward for all timesteps in the batch
     batch_size = observations.shape[0]
     return jnp.full((batch_size,), kl_div)
 
@@ -300,13 +298,16 @@ def update_vime(
     actions = flatten_batch(batch.action)
     next_observations = jnp.roll(observations, -1, axis=0)  # Next observations
 
-    # Create dynamics network
+    # Create dynamics network (same as initialization)
     dynamics_net = DynamicsBNN(
         hidden_layer_sizes=bonus.params.hidden_layer_sizes,
-        obs_dim=bonus.obs_dim,
-        action_dim=bonus.action_dim,
         prior_scale=bonus.params.prior_scale
     )
+
+    # Flatten inputs for consistency
+    obs_flat = observations.reshape(observations.shape[0], -1)
+    actions_flat = actions.reshape(actions.shape[0], -1)
+    next_obs_flat = next_observations.reshape(next_observations.shape[0], -1)
 
     # Define loss function on full batch
     def loss_fn(params):
@@ -315,7 +316,7 @@ def update_vime(
 
         def single_prediction(rng_key):
             pred = dynamics_net.apply(
-                params, observations, actions,
+                params, obs_flat, actions_flat,
                 sample_weights=True,
                 rngs={'weights': rng_key, 'biases': rng_key}
             )
@@ -326,7 +327,7 @@ def update_vime(
         mean_pred = jnp.mean(predictions, axis=0)
 
         # Reconstruction loss
-        mse_loss = jnp.mean((mean_pred - next_observations) ** 2)
+        mse_loss = jnp.mean((mean_pred - next_obs_flat) ** 2)
         return mse_loss
 
     # Compute gradients and update
