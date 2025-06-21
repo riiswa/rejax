@@ -24,7 +24,7 @@ class RNKParams(ExplorationBonusParams):
     """
     n_features: int = 1024
     length_scale: float = None
-    reg: float = 1.
+    reg: float = 1e-3
     n_iterations: int = struct.field(pytree_node=False, default=0)
     n_samples: int = struct.field(pytree_node=False, default=256)
     use_effective_dim: bool = struct.field(pytree_node=False, default=True)
@@ -155,7 +155,7 @@ def init_rnk(key: jnp.ndarray, obs_size: int, params: RNKParams) -> RNKBonus:
         precision_matrix=precision_matrix,
         feature_fn=jax.tree_util.Partial(feature_fn),
         count=jnp.array(0.0),
-        length_scale=params.length_scale if params.length_scale is not None else jnp.sqrt(obs_size) * 2.5,
+        length_scale=params.length_scale if params.length_scale is not None else jnp.sqrt(obs_size),
     )
 
     return RNKBonus(state=state, params=params)
