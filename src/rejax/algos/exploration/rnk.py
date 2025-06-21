@@ -26,7 +26,7 @@ class RNKParams(ExplorationBonusParams):
     length_scale: float = None
     reg: float = 1.
     n_iterations: int = struct.field(pytree_node=False, default=0)
-    n_samples: int = struct.field(pytree_node=False, default=256)
+    n_samples: int = struct.field(pytree_node=False, default=None)
     use_effective_dim: bool = struct.field(pytree_node=False, default=True)
 
 # -----------------------------------------------------------------------------
