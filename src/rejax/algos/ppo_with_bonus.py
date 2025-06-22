@@ -250,8 +250,16 @@ class PPO(OnPolicyMixin, NormalizeObservationsMixin, NormalizeRewardsMixin, Algo
             else:
                 action_size = np.prod(action_space.shape)  # ← Added continuous case
 
+            # Auto-detect from environment:
+            if self.discrete:
+                discrete_actions = True
+                num_discrete_actions = action_space.n  # Auto-detected!
+            else:
+                discrete_actions = False
+                num_discrete_actions = None
+
             exploration_bonus = create_exploration_bonus(
-                self.bonus_type, rng_bonus, obs_size, action_size, self.bonus_params  # ← Added action_size
+                self.bonus_type, rng_bonus, obs_size, action_size, self.bonus_params, discrete_actions, num_discrete_actions  # ← Added action_size
             )
         else:
             exploration_bonus = None
@@ -693,8 +701,8 @@ if __name__ == "__main__":
     from aim import Run
 
     config = {
-        "env": "custom/pointmaze-large-v0",
-        "bonus_type": "vime",
+        "env": "Asterix-MinAtar",
+        "bonus_type": "rnk",
         "normalize_observations": True,
         "normalize_intrinsic_rewards": True,
         "total_timesteps": 1_000_000,
