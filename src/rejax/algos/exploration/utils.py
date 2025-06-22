@@ -21,9 +21,7 @@ def create_exploration_bonus(
     key: jnp.ndarray,
     obs_size: int,
     action_size: int,
-    bonus_params: Any,
-    discrete_actions=False,
-    num_discrete_actions=None
+    bonus_params: Any
 ) -> Optional[Any]:
     """Create an exploration bonus instance of the specified type."""
     if bonus_type == "none" or not bonus_type:
@@ -34,7 +32,7 @@ def create_exploration_bonus(
         return init_rnd(key, obs_size, bonus_params)
     elif bonus_type == "rnk":
         from rejax.algos.exploration.rnk import init_rnk
-        return init_rnk(key, obs_size, action_size, bonus_params, discrete_actions, num_discrete_actions)
+        return init_rnk(key, obs_size, bonus_params)
     elif bonus_type == "drnd":
         from rejax.algos.exploration.drnd import init_drnd
         return init_drnd(key, obs_size, bonus_params)
